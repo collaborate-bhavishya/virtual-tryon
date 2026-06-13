@@ -1,0 +1,10 @@
+{
+  "name": "gemini-try-on-root",
+  "version": "1.0.0",
+  "description": "Root workspace to launch both backend and frontend for the virtual try-on app.",
+  "scripts": {
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "npm run dev:backend & npm run dev:frontend"
+  }
+}
