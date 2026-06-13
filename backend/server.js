@@ -4,7 +4,50 @@ import multer from 'multer';
 import { GoogleGenAI, RawReferenceImage, MaskReferenceImage } from '@google/genai';
 import dotenv from 'dotenv';
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const settingsPath = path.join(__dirname, 'settings.json');
+
+function readSettings() {
+  try {
+    if (fs.existsSync(settingsPath)) {
+      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+  } catch (err) {
+    console.error("Failed to read settings.json:", err);
+  }
+  return {
+    maxGenerationsPerDay: 50,
+    generationsToday: 0,
+    lastResetDate: "",
+    promptTemplate: "A professional photograph of the exact same person from the reference image, but they are wearing: {{garmentDescription}}. Keep the person's face, features, hair, skin tone, body shape, pose, expression, and the background completely identical."
+  };
+}
+
+function writeSettings(settings) {
+  try {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (err) {
+    console.error("Failed to write settings.json:", err);
+  }
+}
+
+function checkAndResetDailyCounter() {
+  const settings = readSettings();
+  const todayStr = new Date().toISOString().split('T')[0];
+  if (settings.lastResetDate !== todayStr) {
+    settings.generationsToday = 0;
+    settings.lastResetDate = todayStr;
+    writeSettings(settings);
+  }
+  return settings;
+}
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -65,6 +108,13 @@ app.post('/api/try-on', upload.fields([
   { name: 'cloth', maxCount: 1 }
 ]), async (req, res) => {
   try {
+    const settings = checkAndResetDailyCounter();
+    if (settings.generationsToday >= settings.maxGenerationsPerDay) {
+      return res.status(429).json({
+        error: `Daily generation limit of ${settings.maxGenerationsPerDay} images reached. Please contact your administrator.`
+      });
+    }
+
     if (!isVertex && !process.env.GEMINI_API_KEY) {
       return res.status(500).json({
         error: 'GEMINI_API_KEY is not configured on the server. Please add it to your .env file or enable Vertex AI mode.'
@@ -174,6 +224,10 @@ Do not include any introductory or concluding text. Return ONLY the description 
         ((geminiUsage.promptTokens * 0.075 / 1000000) + (geminiUsage.candidatesTokens * 0.30 / 1000000)) : 0;
       const vtoCost = 0.06; // $0.06 per generated VTO image
       const totalCost = vtoCost + geminiCost;
+
+      // Increment daily generations counter
+      settings.generationsToday += 1;
+      writeSettings(settings);
 
       return res.json({
         success: true,
@@ -288,6 +342,10 @@ Do NOT include any introductory or concluding text. Write ONLY the final image g
     const imageCost = 0.03; // ~ $0.03 per image for standard Imagen 3
     const totalCost = imageCost + geminiCost;
 
+    // Increment daily generations counter
+    settings.generationsToday += 1;
+    writeSettings(settings);
+
     // Return the result
     res.json({
       success: true,
@@ -308,6 +366,36 @@ Do NOT include any introductory or concluding text. Write ONLY the final image g
       details: error.message || error,
     });
   }
+});
+
+// Admin Panel endpoints
+app.get('/api/admin/settings', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader !== 'Bearer admin123') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const settings = checkAndResetDailyCounter();
+  res.json(settings);
+});
+
+app.post('/api/admin/settings', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader !== 'Bearer admin123') {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { maxGenerationsPerDay, promptTemplate, resetCounter } = req.body;
+  const settings = readSettings();
+  if (maxGenerationsPerDay !== undefined) {
+    settings.maxGenerationsPerDay = Number(maxGenerationsPerDay);
+  }
+  if (promptTemplate !== undefined) {
+    settings.promptTemplate = promptTemplate;
+  }
+  if (resetCounter === true) {
+    settings.generationsToday = 0;
+  }
+  writeSettings(settings);
+  res.json({ success: true, settings });
 });
 
 app.listen(port, () => {

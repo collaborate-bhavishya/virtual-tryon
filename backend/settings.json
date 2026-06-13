@@ -1,0 +1,6 @@
+{
+  "maxGenerationsPerDay": 50,
+  "generationsToday": 0,
+  "lastResetDate": "",
+  "promptTemplate": "A professional photograph of the exact same person from the reference image, but they are wearing: {{garmentDescription}}. Keep the person's face, features, hair, skin tone, body shape, pose, expression, and the background completely identical."
+}

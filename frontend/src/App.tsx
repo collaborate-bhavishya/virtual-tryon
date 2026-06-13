@@ -9,7 +9,12 @@ import {
   RefreshCw, 
   AlertTriangle,
   Info,
-  Shirt
+  Shirt,
+  Settings,
+  Lock,
+  X,
+  Sliders,
+  ShieldCheck
 } from 'lucide-react';
 
 type Step = 'idle' | 'uploading' | 'analyzing' | 'generating' | 'completed';
@@ -91,6 +96,74 @@ export default function App() {
   const [generationUsage, setGenerationUsage] = useState<UsageDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+
+  // Admin Panel States
+  const [isAdminOpen, setIsAdminOpen] = useState<boolean>(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [adminSettings, setAdminSettings] = useState<{
+    maxGenerationsPerDay: number;
+    generationsToday: number;
+    lastResetDate: string;
+    promptTemplate: string;
+  } | null>(null);
+  const [adminSaving, setAdminSaving] = useState<boolean>(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+
+  const handleAdminLogin = async () => {
+    if (!adminPasswordInput) return;
+    setAdminError(null);
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/settings`, {
+        headers: {
+          'Authorization': `Bearer ${adminPasswordInput}`
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setAdminError(data.error || 'Authentication failed.');
+        return;
+      }
+      setAdminSettings(data);
+      setIsAdminAuthenticated(true);
+    } catch (err: any) {
+      setAdminError('Failed to connect to admin server.');
+    }
+  };
+
+  const handleSaveAdminSettings = async (resetCounter = false) => {
+    if (!adminSettings) return;
+    setAdminSaving(true);
+    setAdminError(null);
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/admin/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminPasswordInput}`
+        },
+        body: JSON.stringify({
+          maxGenerationsPerDay: adminSettings.maxGenerationsPerDay,
+          promptTemplate: adminSettings.promptTemplate,
+          resetCounter
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setAdminError(data.error || 'Failed to save settings.');
+        setAdminSaving(false);
+        return;
+      }
+      setAdminSettings(data.settings);
+      setAdminSaving(false);
+      alert('Settings saved successfully!');
+    } catch (err: any) {
+      setAdminError('Failed to save settings.');
+      setAdminSaving(false);
+    }
+  };
 
   // Drag over states
   const [modelDragActive, setModelDragActive] = useState<boolean>(false);
@@ -259,12 +332,20 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Header */}
-      <header className="app-header">
+      <header className="app-header" style={{ position: 'relative' }}>
+        <button 
+          onClick={() => setIsAdminOpen(true)} 
+          className="btn-admin" 
+          style={{ position: 'absolute', top: '0rem', right: '0rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '0.6rem 0.9rem', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'var(--transition-smooth)', color: 'var(--color-text-main)' }}
+        >
+          <Settings size={15} />
+          Admin Panel
+        </button>
         <div className="brand-badge">
           <Sparkles size={14} />
-          Vertex AI Virtual Try-On
+          Reference Based Generation
         </div>
-        <h1 className="app-title">TryOn AI</h1>
+        <h1 className="app-title">Reference Based Generation</h1>
         <p className="app-subtitle">
           Upload a model photo and a garment photo. The AI will automatically detect the person's body shape, determine the fit, and replace their clothing while keeping the face and background identical.
         </p>
@@ -575,6 +656,136 @@ export default function App() {
           )}
         </div>
       </div>
+      {/* Admin Panel Modal */}
+      {isAdminOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1.5rem' }}>
+          <div className="panel-card" style={{ maxWidth: '500px', width: '100%', padding: '2rem', border: '1px solid var(--border-active)', boxShadow: '0 20px 50px rgba(139, 92, 246, 0.15)', position: 'relative' }}>
+            <button 
+              onClick={() => {
+                setIsAdminOpen(false);
+                setIsAdminAuthenticated(false);
+                setAdminPasswordInput('');
+                setAdminError(null);
+              }} 
+              style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+            >
+              <X size={20} />
+            </button>
+
+            {!isAdminAuthenticated ? (
+              // Login view
+              <div style={{ display: 'flex', gap: '1.25rem', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--color-primary)' }}>
+                  <Lock size={24} />
+                  <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Admin Authentication</h3>
+                </div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                  Please enter the administrator passcode to access rate limits and configuration settings.
+                </p>
+                <input 
+                  type="password" 
+                  className="custom-input" 
+                  placeholder="Enter passcode (default: admin123)" 
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
+                  style={{ minHeight: 'unset', padding: '0.75rem 1rem' }}
+                />
+                {adminError && <span style={{ color: 'var(--color-error)', fontSize: '0.8rem' }}>{adminError}</span>}
+                <button className="generate-btn" onClick={handleAdminLogin} style={{ padding: '0.85rem' }}>
+                  Unlock Settings
+                </button>
+              </div>
+            ) : (
+              // Authenticated Admin Dashboard view
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--color-success)' }}>
+                  <ShieldCheck size={24} />
+                  <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Admin Dashboard</h3>
+                </div>
+
+                {adminSettings && (
+                  <>
+                    {/* Quota Counter Info */}
+                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ color: 'var(--color-text-muted)' }}>Generations Today:</span>
+                        <strong style={{ color: 'var(--color-text-main)' }}>{adminSettings.generationsToday} / {adminSettings.maxGenerationsPerDay}</strong>
+                      </div>
+                      <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.min(100, (adminSettings.generationsToday / adminSettings.maxGenerationsPerDay) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, var(--color-primary), var(--color-success))' }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Last reset date: {adminSettings.lastResetDate || 'None'}</span>
+                        <button 
+                          onClick={() => handleSaveAdminSettings(true)} 
+                          style={{ background: 'transparent', border: 'none', color: 'var(--color-primary)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                        >
+                          Reset Counter
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Setting: Max Generations Limit */}
+                    <div className="config-group" style={{ marginBottom: 0 }}>
+                      <label className="config-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Sliders size={14} />
+                        Daily Generation Limit
+                      </label>
+                      <input 
+                        type="number" 
+                        className="custom-input" 
+                        value={adminSettings.maxGenerationsPerDay} 
+                        onChange={(e) => setAdminSettings({ ...adminSettings, maxGenerationsPerDay: Math.max(0, Number(e.target.value)) })}
+                        style={{ minHeight: 'unset', padding: '0.75rem' }}
+                      />
+                    </div>
+
+                    {/* Setting: Prompt Template */}
+                    <div className="config-group" style={{ marginBottom: 0 }}>
+                      <label className="config-label">Fallback Prompt Template</label>
+                      <textarea 
+                        className="custom-input" 
+                        value={adminSettings.promptTemplate} 
+                        onChange={(e) => setAdminSettings({ ...adminSettings, promptTemplate: e.target.value })}
+                        style={{ minHeight: '120px', fontSize: '0.8rem' }}
+                      />
+                      <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                        Use `{"{{garmentDescription}}"}` as a placeholder for Gemini's clothing parsing.
+                      </span>
+                    </div>
+
+                    {adminError && <span style={{ color: 'var(--color-error)', fontSize: '0.8rem' }}>{adminError}</span>}
+
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                      <button 
+                        className="btn-secondary" 
+                        onClick={() => {
+                          setIsAdminOpen(false);
+                          setIsAdminAuthenticated(false);
+                          setAdminPasswordInput('');
+                          setAdminError(null);
+                        }} 
+                        style={{ flex: 1, padding: '0.85rem' }}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        className="btn-download" 
+                        onClick={() => handleSaveAdminSettings(false)} 
+                        disabled={adminSaving}
+                        style={{ flex: 1, padding: '0.85rem' }}
+                      >
+                        {adminSaving ? 'Saving...' : 'Save Settings'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
