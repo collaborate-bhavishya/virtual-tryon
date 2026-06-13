@@ -192,7 +192,8 @@ export default function App() {
       progressTimer1 = setTimeout(() => setGenerationStep('analyzing'), 2000);
       progressTimer2 = setTimeout(() => setGenerationStep('generating'), 5000);
 
-      const response = await fetch('/api/try-on', {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${apiBaseUrl}/api/try-on`, {
         method: 'POST',
         body: formData,
       });
