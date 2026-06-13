@@ -201,6 +201,9 @@ Do not include any introductory or concluding text. Return ONLY the description 
                 }
               }
             ]
+          },
+          config: {
+            personGeneration: 'ALLOW_ALL'
           }
         });
 
@@ -316,6 +319,7 @@ Do NOT include any introductory or concluding text. Write ONLY the final image g
           numberOfImages: 1,
           outputMimeType: 'image/jpeg',
           aspectRatio: aspectRatio,
+          personGeneration: 'ALLOW_ALL',
         },
       });
 
