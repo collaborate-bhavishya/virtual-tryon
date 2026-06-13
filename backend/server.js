@@ -373,9 +373,11 @@ Do NOT include any introductory or concluding text. Write ONLY the final image g
 });
 
 // Admin Panel endpoints
+const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'Zunoapp@2026';
+
 app.get('/api/admin/settings', (req, res) => {
   const authHeader = req.headers.authorization;
-  if (authHeader !== 'Bearer admin123') {
+  if (authHeader !== `Bearer ${ADMIN_PASSCODE}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const settings = checkAndResetDailyCounter();
@@ -384,7 +386,7 @@ app.get('/api/admin/settings', (req, res) => {
 
 app.post('/api/admin/settings', (req, res) => {
   const authHeader = req.headers.authorization;
-  if (authHeader !== 'Bearer admin123') {
+  if (authHeader !== `Bearer ${ADMIN_PASSCODE}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const { maxGenerationsPerDay, promptTemplate, resetCounter } = req.body;

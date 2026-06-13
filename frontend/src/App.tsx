@@ -685,7 +685,7 @@ export default function App() {
                 <input 
                   type="password" 
                   className="custom-input" 
-                  placeholder="Enter passcode (default: admin123)" 
+                  placeholder="Enter passcode" 
                   value={adminPasswordInput}
                   onChange={(e) => setAdminPasswordInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
